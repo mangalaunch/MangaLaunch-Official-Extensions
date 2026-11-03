@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import createMangaKakalot,{buildFilters,searchPath,parseChapters,parsePages} from '../src/sources/mangakakalot.mjs';
+import {sourceDefinitions} from '../src/definitions.mjs';
 test('MangaBox filters/search and opaque chapter IDs preserve legacy semantics', () => {
   assert.equal(buildFilters().length,3); assert.equal(buildFilters()[2].options.length,41);
   assert.deepEqual(searchPath({searchTerm:' One: Piece!! ',page:2}),{path:'/search/story/one_piece',params:{page:2}});
@@ -20,5 +21,9 @@ test('MangaBox retry is source-local and never retries auth/cancellation/parse e
   }
   const calls = []; const source = createMangaKakalot({http:{request:async input => {calls.push(input.url); if (calls.length === 1) throw Object.assign(Error(),{code:'network'}); return {body:'html'};}},html:{extract:async () => []}});
   await source.getLatest(); await source.getLatest();
+  const definition = sourceDefinitions().find(source => source.id === 'en.mangakakalot');
+  assert.equal(new URL(calls[0]).origin,definition.baseUrl);
+  assert.equal(definition.baseUrl,'https://www.kakamanga.com');
+  assert.equal(definition.media.refererOrigin,definition.baseUrl);
   assert.equal(new URL(calls[1]).host,'www.mangakakalove.com'); assert.equal(new URL(calls[2]).host,'www.mangakakalove.com');
 });

@@ -1,58 +1,68 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import createMyAnimeList, {parseManga,parseBrowse,browseUrl} from '../src/sources/myanimelist.mjs';
+import createMyAnimeList, {parseBrowse,browseUrl} from '../src/sources/myanimelist.mjs';
+import {sourceDefinitions} from '../src/definitions.mjs';
 
-const item = id => ({id,title:' English ',alternative_titles:{en:'English',ja:'原作',synonyms:['Other']},
-  main_picture:{large:'https://cdn.myanimelist.net/cover.jpg'},synopsis:' Text ',media_type:'one_shot',status:'finished',
-  start_date:'2020-01-01',genres:[{name:'Action'}],mean:8.7,nsfw:'gray',authors:[
-    {role:'Story',first_name:'A',last_name:'B'},{role:'Story',first_name:'A',last_name:'B'},{role:'Art',first_name:'C'}]});
-const context = (http,html = () => {throw Error('HTML not expected');}) => ({http:{request:async input => ({url:input.url,body:await http(input)})},
-  html:{extract:async (body,query) => html(body,query)}});
-test('MAL preserves numeric IDs, author roles and metadata rating scale', () => {
-  const manga = parseManga(item(123));
-  assert.equal(manga.id,'123'); assert.equal(manga.title,'English'); assert.equal(manga.secondaryTitle,'原作');
-  assert.equal(manga.author,'A B'); assert.equal(manga.artist,'C'); assert.equal(manga.rating,8.7);
-  assert.equal(manga.status,'completed'); assert.equal(manga.type,'One Shot'); assert.equal(manga.ageRating,'18+');
+const context = (http,html) => ({
+  http:{request:async input => ({url:input.url,body:await http(input)})},
+  html:{extract:async (body,query) => html(body,query)},
 });
-test('MAL API ranking/search/details retain page sizes, IDs and fields, leaving app client ID to host', async () => {
-  const requests = [];
-  const source = createMyAnimeList(context(input => {requests.push(input); return input.url.includes('/manga/123?') ? item(123) : {data:[{node:item(123)}]};}));
-  await source.getPopular({page:2}); await source.getLatest(); await source.search({searchTerm:'x'.repeat(80),selectedFilters:{}});
-  assert.equal((await source.getDetails({mangaId:'123'})).id,'123');
-  const [popular,latest,search] = requests.map(input => new URL(input.url));
-  assert.equal(popular.searchParams.get('ranking_type'),'bypopularity'); assert.equal(popular.searchParams.get('offset'),'24');
-  assert.equal(latest.searchParams.get('ranking_type'),'all'); assert.equal(search.searchParams.get('q').length,64);
-  assert.ok(requests.every(input => input.headers['X-MAL-CLIENT-ID'] == null && input.headers.Cookie == null));
+const card = {link:{href:'/manga/123/title',title:'Title'},info:'Manga (? vols) Aug 2020 -',rating:'8.7',
+  image:{dataSrc:'https://cdn.myanimelist.net/r/50x70/cover.jpg',dataSet:'/cover-small.jpg 1x, /cover-large.jpg 2x'}};
+const row = (label,value,links = []) => ({label,value,links});
+const details = {title:'Title',cover:'https://cdn.myanimelist.net/images/manga/cover.jpg',description:'Synopsis',rating:'8.7',
+  metadata:[row('English:','Title'),row('Japanese:','原作'),row('Type:','One-shot'),row('Status:','Finished'),
+    row('Published:','Apr 12, 2020'),row('Authors:','Writer (Story), Illustrator (Art), Both (Story & Art)',['Writer','Illustrator','Both']),
+    row('Genres:','Action',['Action']),row('Themes:','School',['School'])]};
+const recommendation = (left,right) => ({title:'Related',href:'/recommendations/manga/'+left+'-'+right,image:{dataSrc:'/related.jpg'}});
+
+test('public rankings use site paging, include CDN covers and need no API client ID', async () => {
+  const calls = [];
+  const source = createMyAnimeList(context(input => {calls.push(input); return 'HTML';}, () => [card]));
+  const [item] = await source.getPopular({page:2});
+  await source.getLatest();
+  assert.equal(item.id,'123');
+  assert.equal(item.coverUrl,'https://myanimelist.net/cover-large.jpg');
+  assert.equal(item.rating,8.7);
+  assert.equal(item.releaseYear,'2020');
+  const [popular,top] = calls.map(input => new URL(input.url));
+  assert.equal(popular.origin,'https://myanimelist.net');
+  assert.equal(popular.pathname,'/topmanga.php');
+  assert.equal(popular.searchParams.get('type'),'bypopularity');
+  assert.equal(popular.searchParams.get('limit'),'50');
+  assert.equal(top.searchParams.has('type'),false);
+  assert.ok(calls.every(input => input.responseType==='text' && !input.headers['X-MAL-CLIENT-ID']));
+  const definition = sourceDefinitions().find(source => source.id === 'en.myanimelist');
+  assert.ok(definition.metadataOnly && definition.network.imageOrigins.includes('https://cdn.myanimelist.net'));
 });
-test('MAL minimal-fields fallback is bounded and does not repeat auth/rate-limit/cancel failures', async () => {
-  let calls = 0;
-  const source = createMyAnimeList(context(input => {calls++; return {data:input.url.includes('fields=') ? [] : [{node:item(123)}]};}));
-  assert.equal((await source.getPopular())[0].id,'123'); assert.equal(calls,2);
-  await source.getPopular({page:2}); assert.equal(calls,3);
-  for (const code of ['auth_required','rate_limited','cancelled','auth_session_changed','parse_error']) {
-    let attempts = 0;
-    await assert.rejects(createMyAnimeList(context(() => {attempts++; throw Object.assign(Error(code),{code});})).getPopular(),error => error.code === code);
-    assert.equal(attempts,1);
-  }
-});
-test('MAL filtered search uses website values and repeated genre parameters instead of API-only filters', async () => {
+
+test('search retains site filter values and stops beyond the last result page', async () => {
   const query = {page:2,searchTerm:' title ',selectedFilters:{type:['manhwa|5'],status:['finished|2'],genre:['1','2']}};
   const url = new URL(browseUrl(query));
-  assert.equal(url.searchParams.get('show'),'50'); assert.equal(url.searchParams.get('q'),'title');
-  assert.equal(url.searchParams.get('type'),'5'); assert.equal(url.searchParams.get('status'),'2');
+  assert.equal(url.searchParams.get('cat'),'manga');
+  assert.equal(url.searchParams.get('show'),'50');
+  assert.equal(url.searchParams.get('q'),'title');
+  assert.equal(url.searchParams.get('type'),'5');
+  assert.equal(url.searchParams.get('status'),'2');
   assert.deepEqual(url.searchParams.getAll('genre[]'),['1','2']);
-  const source = createMyAnimeList(context(input => {assert.equal(input.responseType,'text'); return 'HTML';},
-    (body,projection) => {assert.equal(body,'HTML'); assert.ok(projection.fields.tiles); return {tiles:[],rows:[]};}));
+  const error = Object.assign(Error('No page'),{httpStatus:404});
+  const source = createMyAnimeList(context(() => {throw error;}));
   assert.deepEqual(await source.search(query),[]);
+  await assert.rejects(source.search({...query,page:1}),error);
 });
-test('MAL tile and table projections retain larger/lazy covers, descriptions, genres, status and year', () => {
+
+test('MAL tile and table results retain cover, description and visible metadata', () => {
   const tile = parseBrowse({tiles:[{href:'/manga/123/title',title:'Title',info:['Manga, 2020','Publishing'],publishing:null,
     synopsis1:'Text',genres:['Action'],image:{dataSet:'/cover.jpg 1x, /cover2.jpg 2x'}}],rows:[]})[0];
-  assert.equal(tile.coverUrl,'https://myanimelist.net/cover.jpg'); assert.equal(tile.status,'Publishing'); assert.equal(tile.releaseYear,'2020');
-  const row = parseBrowse({tiles:[],rows:[{links:[{href:'/manga/123/title',title:''},{href:'/manga/123/title',title:'Title'}],
-    description:'Title Short description',type:'Manga',rating:'8.7',image:{src:'/cover.jpg'}}]})[0];
-  assert.equal(row.description,'Short description'); assert.equal(row.rating,8.7); assert.equal(row.id,'123');
+  assert.equal(tile.coverUrl,'https://myanimelist.net/cover2.jpg');
+  assert.equal(tile.status,'ongoing');
+  assert.equal(tile.releaseYear,'2020');
+  const table = parseBrowse({tiles:[],rows:[{link:card.link,description:'Short description',type:'Manga',rating:'8.7',image:{src:'/cover.jpg'}}]})[0];
+  assert.equal(table.description,'Short description');
+  assert.equal(table.rating,8.7);
+  assert.equal(table.id,'123');
 });
+
 test('MAL genres cache is per context and count suffix is removed', async () => {
   let calls = 0;
   const ctx = context(() => {calls++; return 'HTML';},(_,projection) => {
@@ -63,12 +73,27 @@ test('MAL genres cache is per context and count suffix is removed', async () => 
   await source.getFilters({refresh:true}); assert.equal(calls,2);
   await createMyAnimeList(ctx).getFilters(); assert.equal(calls,3);
 });
-test('MAL recommendations exclude self and duplicates and do no HTTP work on page 2', async () => {
+
+test('one title request supplies metadata and recommendations with either ID order', async () => {
   let calls = 0;
-  const source = createMyAnimeList(context(() => {calls++; return 'HTML';},() => [123,456,456].map(id => ({
-    title:`Title ${id}`,href:`/recommendations/manga/123-${id}`,image:{dataSrc:'https://cdn.myanimelist.net/cover.jpg'}}))));
-  assert.deepEqual((await source.getRecommendations({mangaId:'123'})).items.map(value => value.id),['456']);
-  assert.deepEqual((await source.getRecommendations({mangaId:'123',page:2})).items,[]); assert.equal(calls,1);
-  assert.deepEqual(await source.getChapters(),[]); await assert.rejects(source.getPages(),error => error.code === 'parse_error');
-  await assert.rejects(createMyAnimeList(context(() => ({oops:true}))).getPopular(),error => error.code === 'parse_error');
+  const source = createMyAnimeList(context(input => {
+    calls++;
+    assert.equal(input.url,'https://myanimelist.net/manga/123');
+    return 'HTML';
+  }, () => ({...details,recommendations:[recommendation(123,123),recommendation(456,123),recommendation(123,456),
+    recommendation(123,789),recommendation(12,34)]})));
+  const mangaId = '123';
+  assert.deepEqual((await source.getRecommendations({mangaId,page:2})).items,[]);
+  assert.equal(calls,0);
+  const [item,related] = await Promise.all([source.getDetails({mangaId}),source.getRecommendations({mangaId})]);
+  assert.equal(item.author,'Writer, Both');
+  assert.equal(item.artist,'Illustrator, Both');
+  assert.equal(item.secondaryTitle,'原作');
+  assert.equal(item.status,'completed');
+  assert.equal(item.releaseYear,'2020');
+  assert.deepEqual(item.tags,['Action','School']);
+  assert.deepEqual(related.items.map(value => value.id),['456','789']);
+  assert.equal(calls,1);
+  assert.deepEqual(await source.getChapters(),[]);
+  await assert.rejects(source.getPages(),{code:'parse_error'});
 });

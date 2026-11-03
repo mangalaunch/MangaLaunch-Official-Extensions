@@ -12,8 +12,18 @@ test('both installed MangaDex variants advertise their implemented recommendatio
     assert.equal(source.features.recommendations,true);
     assert.ok(source.capabilities.includes('recommendations'));
     assert.ok(source.network.origins.includes('https://api.mangadex.org'));
+    assert.ok(source.network.authOrigins.includes('https://api.mangadex.org'));
+    assert.ok(source.network.authOrigins.includes('https://uploads.mangadex.org'));
     assert.equal(source.parameters.translatedLanguage,source.language);
   }
+});
+
+test('MangaDex exposes the observed verification response to the source WebView flow', async () => {
+  const source = createMangaDex({parameters:{translatedLanguage:'en'},http:{request:async input => {
+    assert.equal(input.userAgentProfile,'browser');
+    throw Object.assign(Error('HTTP 403'),{code:'access_denied',httpStatus:403,body:'Bot challenge not passed, refresh this page.'});
+  }}});
+  await assert.rejects(source.getPopular(),{code:'challenge_required',httpStatus:403});
 });
 
 const item = (id = 'manga-opaque') => ({id,attributes:{title:{en:'English',ru:'Русское имя',ja:'日本語'},
@@ -34,7 +44,8 @@ test('localized metadata, tags, cover, creators and opaque IDs match the Dart co
   assert.equal(ru.secondaryTitle,'English'); assert.equal(en.secondaryTitle,'日本語');
   assert.equal(ru.description,'Описание'); assert.equal(en.description,'Description');
   assert.equal(ru.author,'AUTHOR'); assert.equal(ru.artist,'Artist');
-  assert.equal(ru.coverUrl,'https://uploads.mangadex.org/covers/manga-opaque/cover.png');
+  assert.equal(ru.coverUrl,'https://uploads.mangadex.org/covers/manga-opaque/cover.png.512.jpg');
+  assert.equal(en.coverUrl,ru.coverUrl);
   assert.deepEqual(ru.tags,['Боевик']); assert.equal(ru.releaseYear,'2025');
   assert.equal(en.rating,null);
 });

@@ -1,6 +1,6 @@
 # Creating and publishing MangaLaunch extensions
 
-[Russian](AUTHORING_RU.md)
+**English** · [Русский](AUTHORING_RU.md)
 
 Sections: [complete source example](#source-example) · [filter contract](#filter-contract) · [publication](#publishing) · [DTO, ctx and manifest reference](#api-reference).
 

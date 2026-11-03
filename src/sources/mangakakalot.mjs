@@ -1,7 +1,7 @@
 import {chapter,filter,isoDate,manga,normalizeText,parseError,record,string} from '../core/data.mjs';
 import {finiteNumber,requireArray,requireRecord,urlWithQuery} from '../core/http.mjs';
 
-const hosts = ['www.mangakakalot.gg','www.mangakakalove.com'];
+const hosts = ['www.kakamanga.com','www.mangakakalove.com'];
 const genreLabels = ['All','Action','Adult','Adventure','Comedy','Cooking','Doujinshi','Drama','Ecchi','Fantasy','Gender bender','Harem',
   'Historical','Horror','Isekai','Josei','Manhua','Manhwa','Martial arts','Mature','Mecha','Medical','Mystery','One shot','Psychological',
   'Romance','School life','Sci fi','Seinen','Shoujo','Shoujo ai','Shounen','Shounen ai','Slice of life','Smut','Sports','Supernatural','Tragedy','Webtoons','Yaoi','Yuri'];
@@ -19,10 +19,10 @@ export function searchPath({searchTerm = '',page = 1,selectedFilters = {}} = {})
 }
 export function mangaId(raw) {
   const value = string(raw); if (!value) return null;
-  return new URL(value,'https://www.mangakakalot.gg').pathname.match(/\/manga\/([^/?#]+)/u)?.[1] ?? (!value.includes('/') ? value : null);
+  return new URL(value,`https://${hosts[0]}`).pathname.match(/\/manga\/([^/?#]+)/u)?.[1] ?? (!value.includes('/') ? value : null);
 }
 const imageFields = {src:{attr:'src'},lazy:{attr:'data-src'}};
-const resolveImage = (value,base) => { const row = record(value), raw = string(row.src ?? row.lazy); return raw ? new URL(raw,base).href : null; };
+const resolveImage = (value,base) => { const row = record(value), raw = string(row.lazy) ?? string(row.src); return raw ? new URL(raw,base).href : null; };
 export const listingProjection = {selector:'div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap, .panel_story_list .story_item',all:true,fields:{
   heading:{selector:'h3 a',fields:{href:{attr:'href'},title:{text:true}}},story:{selector:'.story_name a',fields:{href:{attr:'href'},title:{text:true}}},
   fallback:{selector:'a[href*="/manga/"]',fields:{href:{attr:'href'},title:{text:true}}},image:{selector:'img',fields:imageFields}}};
@@ -90,7 +90,6 @@ export function parsePages(input,base) {
 }
 export default function createMangaKakalot(ctx) {
   let active = 0;
-  const base = () => `https://${hosts[active]}`;
   async function request(path,params = {},json = false) {
     let last;
     for (const index of [active,...hosts.map((_,index) => index).filter(index => index !== active)]) {
@@ -100,10 +99,15 @@ export default function createMangaKakalot(ctx) {
       try {
         const response = await ctx.http.request({method:'GET',url,responseType:'text',userAgentProfile:'browser',headers:{
           Accept:json ? 'application/json,text/plain,*/*' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'en-US,en;q=0.9',Origin:origin,Referer:`${origin}/`}});
-        active = index;
         if (typeof response.body !== 'string' || !response.body.trim()) throw Object.assign(Error('Empty MangaBox payload.'),{code:'invalid_response',phase:'http'});
-        if (json) { try { return requireRecord(JSON.parse(response.body),'MangaBox payload'); } catch { throw parseError('Invalid MangaBox JSON.'); } }
-        return response;
+        let result;
+        if (json) {
+          try { result = requireRecord(JSON.parse(response.body),'MangaBox payload'); } catch { throw parseError('Invalid MangaBox JSON.'); }
+        } else {
+          result = {body:response.body,url:response.url ?? url};
+        }
+        active = index;
+        return result;
       } catch (error) {
         // Never retry cancellation, credentials, challenges, rate limits or a bad parser response on another mirror.
         if (!['network','offline','timeout','not_found'].includes(error.code) && !(error.httpStatus >= 500)) throw error;
@@ -112,15 +116,21 @@ export default function createMangaKakalot(ctx) {
     }
     throw last;
   }
-  async function html(path,params,projection) { const response = await request(path,params); return {data:await ctx.html.extract(response.body,{...projection,baseUrl:response.url ?? new URL(path,base()).href}),url:response.url ?? new URL(path,base()).href}; }
-  const listing = async (path,params) => parseListing((await html(path,params,listingProjection)).data,base());
+  async function html(path,params,projection) {
+    const {body,url} = await request(path,params);
+    return {data:await ctx.html.extract(body,{...projection,baseUrl:url}),url};
+  }
+  async function listing(path,params) {
+    const {data,url} = await html(path,params,listingProjection);
+    return parseListing(data,url);
+  }
   return {
     async getFilters() { return buildFilters(); },
     async getPopular({page = 1} = {}) { return listing('/manga-list/hot-manga',{page:Math.max(1,page)}); },
     async getLatest({page = 1} = {}) { return listing('/manga-list/latest-manga',{page:Math.max(1,page)}); },
     async search(query) { const {path,params} = searchPath(query); return listing(path,params); },
-    async getDetails({mangaId:id}) { const page = await html(`/manga/${id}`,{},detailsProjection); return parseDetails(page.data,id,base(),page.url); },
+    async getDetails({mangaId:id}) { const {data,url} = await html(`/manga/${id}`,{},detailsProjection); return parseDetails(data,id,url,url); },
     async getChapters({mangaId:id}) { return parseChapters(await request(`/api/manga/${id}/chapters`,{limit:'-1'},true),id); },
-    async getPages({chapterId:id}) { return parsePages((await html(id,{},pagesProjection)).data,base()); },
+    async getPages({chapterId:id}) { const {data,url} = await html(id,{},pagesProjection); return parsePages(data,url); },
   };
 }

@@ -77,7 +77,7 @@ export function parseManga(value, language) {
   const cover = relationships.filter(item => item.type === 'cover_art').map(item => string(record(item.attributes).fileName)).find(Boolean);
   const names = type => uniqueText(relationships.filter(item => item.type === type).map(item => string(record(item.attributes).name))).join(', ') || null;
   const alternatives = uniqueText((Array.isArray(attributes.altTitles) ? attributes.altTitles : []).map(item => localized(item,language)));
-  return manga({id,title,coverUrl:cover ? `https://uploads.mangadex.org/covers/${id}/${cover}` : null,
+  return manga({id,title,coverUrl:cover ? `https://uploads.mangadex.org/covers/${encodeURIComponent(id)}/${encodeURIComponent(cover)}.512.jpg` : null,
     secondaryTitle:alternatives.find(value => value !== title) ?? null,
     description:localized(attributes.description,language),author:names('author'),artist:names('artist'),
     status:string(attributes.status),type:string(attributes.publicationDemographic),ageRating:string(attributes.contentRating),
@@ -99,9 +99,16 @@ export default function createMangaDex(ctx) {
   const language = ctx.parameters.translatedLanguage;
   if (!['ru','en'].includes(language)) throw new Error('Unsupported MangaDex language configuration');
   async function json(path, query = {}) {
-    const response = await ctx.http.request({method:'GET',url:urlWithQuery(path,'https://api.mangadex.org',query),responseType:'json',
-      headers:{Accept:'application/json',Origin:'https://mangadex.org',Referer:'https://mangadex.org/'}});
-    return requireRecord(response.body);
+    try {
+      const response = await ctx.http.request({method:'GET',url:urlWithQuery(path,'https://api.mangadex.org',query),responseType:'json',
+        userAgentProfile:'browser',headers:{Accept:'application/json',Origin:'https://mangadex.org',Referer:'https://mangadex.org/'}});
+      return requireRecord(response.body);
+    } catch (error) {
+      if (error.httpStatus === 403 && typeof error.body === 'string' && error.body.includes('Bot challenge not passed')) {
+        throw Object.assign(Error('MangaDex requires browser verification.'),{code:'challenge_required',phase:'http',httpStatus:403});
+      }
+      throw error;
+    }
   }
   const related = recent(async mangaId => [...new Set(data(await json(`/manga/${encodeURIComponent(mangaId)}/recommendation`))
     .flatMap(item => records(requireRecord(item).relationships)).filter(item => item.type === 'manga')

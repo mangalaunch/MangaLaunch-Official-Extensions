@@ -45,7 +45,7 @@ const normalizeLabel = value => normalizeText(value).toLowerCase().replaceAll(':
 const uniqueText = values => [...new Set(requireArray(values,'Weeb Central values').map(normalizeText).filter(Boolean))];
 const imageFields = {source:{selector:'picture source[srcset]',attr:'srcset'},
   image:{selector:'img[src], img[data-src]',fields:{src:{attr:'src'},lazy:{attr:'data-src'}}}};
-const rows = {selector:'li, div, p, dt, dd',all:true,fields:{labels:{selector:'strong, b, dt, .label',all:true,text:true},
+const rows = {selector:'ul > li, div.opacity-70',all:true,fields:{labels:{selector:'strong, b, dt, .label',all:true,text:true},
   text:{text:true},links:{selector:'a',all:true,text:true},items:{selector:'li',all:true,text:true}}};
 function labeledRow(input,candidates) {
   for (const value of requireArray(input,'Weeb Central metadata rows')) {
@@ -72,14 +72,17 @@ function imageUrl(input) {
 }
 const tileFields = {main:{selector:'a.line-clamp-1[href*="/series/"]',fields:{href:{attr:'href'},text:{text:true}}},
   fallback:{selector:'a[href*="/series/"]',fields:{href:{attr:'href'},text:{text:true}}},truncate:{selector:'div.truncate',text:true},
-  tags:{selector:'a[href*="included_tag="]',all:true,text:true},rows,...imageFields};
-export const catalogProjection = {selector:'article.bg-base-300.flex.gap-4.p-4',all:true,fields:tileFields};
+  ...imageFields};
+export const catalogProjection = {selector:'article.bg-base-300.flex.gap-4.p-4',all:true,fields:{...tileFields,
+  tags:{selector:'a[href*="included_tag="]',all:true,text:true},rows,
+  type:{selector:'[data-tip="Manga"], [data-tip="Manhwa"], [data-tip="Manhua"], [data-tip="OEL"]',attr:'data-tip'}}};
 export function parseManga(input) {
   const row = requireRecord(input,'Weeb Central catalog card'), link = requireRecord(row.main ?? row.fallback,'Weeb Central title link');
   const id = seriesId(link.href), title = string(normalizeText(link.text)) ?? string(normalizeText(row.truncate));
   if (!id || !title) return null;
-  const tags = uniqueText(row.tags);
-  return manga({id,title,coverUrl:imageUrl(row),status:status(text(row.rows,['status'])),type:text(row.rows,['type']),
+  const tags = uniqueText(row.tags ?? []), metadata = row.rows ?? [];
+  return manga({id,title,coverUrl:imageUrl(row),status:status(text(metadata,['status'])),type:text(metadata,['type']) ?? string(row.type),
+    releaseYear:text(metadata,['year']),
     ageRating:tags.some(tag => tag.toLowerCase() === 'adult') ? '18+' : null,tags});
 }
 export function parseCatalog(input,excludeId = null) {
@@ -107,23 +110,26 @@ export function parseDetails(input,id,realUrl) {
   const adult = values(infoRows,['adult content'])[0]?.toLowerCase();
   return manga({id:seriesId(realUrl) ?? id,title,coverUrl:sections[0] ? imageUrl(info) ?? imageUrl(data) : imageUrl(data),description,
     secondaryTitle:names.join(', ') || null,author:authors.join(', ') || null,artist:authors.join(', ') || null,
-    tags:values(infoRows,['tag(s)','tags','genre(s)','genres']),type:values(infoRows,['type'])[0] ?? null,
+    tags:values(infoRows,['tag(s)','tags(s)','tags','genre(s)','genres']),type:values(infoRows,['type'])[0] ?? null,
     status:status(values(infoRows,['status'])[0]),releaseYear:values(infoRows,['released'])[0] ?? null,ageRating:['yes','true'].includes(adult) ? '18+' : null});
 }
 export const chaptersProjection = {selector:'div[x-data] > a[href*="/chapters/"]',all:true,fields:{href:{attr:'href'},
   title:{selector:'span.flex > span',text:true},text:{text:true},date:{selector:'time[datetime]',attr:'datetime'}}};
 export function parseChapters(input) {
-  const result = [];
+  const result = [], seen = new Set();
   for (const value of requireArray(input,'Weeb Central chapters')) {
     const row = requireRecord(value,'Weeb Central chapter'), id = chapterId(row.href);
     const title = string(normalizeText(row.title)) ?? string(normalizeText(row.text));
-    if (!id || !title) continue;
+    if (!id || !title || seen.has(id)) continue;
+    seen.add(id);
     const number = Number(title.match(/(?:chapter|ch\.?|episode|ep\.?)\s*(\d+(?:\.\d+)?)/iu)?.[1] ?? title.match(/(\d+(?:\.\d+)?)/u)?.[1] ?? 0);
     result.push(chapter({id:`/chapters/${id}`,title,number,uploadedAt:isoDate(row.date)}));
   }
   return result;
 }
-export const recommendationsProjection = {selector:'section',all:true,fields:{heading:{selector:'h2',text:true},items:{selector:'li',all:true,fields:tileFields}}};
+export const recommendationsProjection = {selector:'ul.glide__slides > li.glide__slide',all:true,fields:tileFields};
+const titleProjection = {fields:{details:detailsProjection,recommendations:recommendationsProjection,
+  chapterList:{selector:'#chapter-list',fields:{showAll:{selector:'[hx-get*="/full-chapter-list"]',attr:'hx-get'},chapters:chaptersProjection}}}};
 export default function createWeebCentral(ctx) {
   const titleUrl = id => new URL(`/series/${id}`,base).href;
   async function html(url,projection) {
@@ -132,31 +138,43 @@ export default function createWeebCentral(ctx) {
     if (typeof response.body !== 'string' || !response.body.trim()) throw Object.assign(Error('Weeb Central returned an empty page.'),{code:'invalid_response',phase:'http'});
     return {url:response.url ?? url,data:await ctx.html.extract(response.body,{...projection,baseUrl:response.url ?? url})};
   }
-  const titlePage = recent(id => html(titleUrl(id),{fields:{details:detailsProjection,recommendations:recommendationsProjection}}));
+  const titlePage = recent(id => html(titleUrl(id),titleProjection));
+  const fullChapters = recent(async id => parseChapters((await html(`${titleUrl(id)}/full-chapter-list`,chaptersProjection)).data));
+  async function details(id) {
+    const page = await titlePage(id);
+    return parseDetails(page.data.details,id,page.url);
+  }
   return {
     async getFilters() { return buildFilters(); },
     async getPopular({page = 1} = {}) { return parseCatalog((await html(searchUrl({page},'Popularity'),catalogProjection)).data); },
     async getLatest({page = 1} = {}) { return parseCatalog((await html(searchUrl({page},'Latest Updates'),catalogProjection)).data); },
     async search(query) {
       if (query.searchTerm?.trim().toLowerCase().startsWith('id:')) {
-        const id = seriesId(query.searchTerm.trim().slice(3)); return id ? [await this.getDetails({mangaId:id})] : [];
+        const id = seriesId(query.searchTerm.trim().slice(3)); return id ? [await details(id)] : [];
       }
       return parseCatalog((await html(searchUrl(query),catalogProjection)).data);
     },
-    async getDetails({mangaId:id}) { const page = await titlePage(id); return parseDetails(page.data.details,id,page.url); },
-    async getChapters({mangaId:id}) { return parseChapters((await html(`${titleUrl(id)}/full-chapter-list`,chaptersProjection)).data); },
+    async getDetails({mangaId:id}) { return details(id); },
+    async getChapters({mangaId:id}) {
+      const cached = await titlePage.peek(id);
+      const list = cached?.data.chapterList;
+      // Do not wait for a title request that is still running in parallel.
+      if (list?.chapters?.length && !list.showAll) return parseChapters(list.chapters);
+      return fullChapters(id);
+    },
     async getPages({chapterId:id}) {
       const normalized = chapterId(id); if (!normalized) throw parseError('Weeb Central chapter id is missing.');
-      const {data} = await html(`${base}/chapters/${normalized}/images?is_prev=False&reading_style=long_strip`,{selector:'section[x-data*=scroll] img, section[x-data~=scroll] img',all:true,attr:'src'});
-      const images = requireArray(data,'Weeb Central pages').map(string).filter(Boolean).map(value => new URL(value,base).href);
+      const {data,url} = await html(`${base}/chapters/${normalized}/images?is_prev=False&reading_style=long_strip`,
+        {selector:'section#chapter-images img, section[x-data*=scroll] img',all:true,fields:{src:{attr:'src'},lazy:{attr:'data-src'}}});
+      const images = requireArray(data,'Weeb Central pages').map(item => string(item.lazy) ?? string(item.src));
       if (!images.length) throw parseError('Weeb Central pages were not found.');
-      return images.map((imageUrl,index) => ({index,imageUrl}));
+      if (images.some(value => !value)) throw parseError('Weeb Central returned an incomplete page list.');
+      return images.map((value,index) => ({index,imageUrl:new URL(value,url).href}));
     },
     async getRecommendations({mangaId:id,page = 1}) {
       const normalized = Math.max(1,page); if (normalized > 1) return {items:[],page:normalized,hasNextPage:false};
       const {data} = await titlePage(id);
-      const section = requireArray(data.recommendations,'Weeb Central recommendations').find(value => normalizeText(record(value).heading).toLowerCase() === 'recommendations');
-      return {items:section ? parseCatalog(section.items,id) : [],page:normalized,hasNextPage:false};
+      return {items:parseCatalog(data.recommendations,id),page:normalized,hasNextPage:false};
     },
   };
 }

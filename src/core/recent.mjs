@@ -6,13 +6,18 @@ export function recent(load,{ttlMs = 15000,limit = 2,now = () => Date.now()} = {
   // Only completed values take LRU slots. Evicting active work would let the
   // next caller start a duplicate request while the first is still running.
   const entries = new Map(), pending = new Map();
-  return function(key) {
-    if (pending.has(key)) return pending.get(key);
+  function peek(key) {
     const old = entries.get(key);
     if (old && old.expires > now()) {
       entries.delete(key); entries.set(key,old); return old.promise;
     }
     entries.delete(key);
+    return undefined;
+  }
+  function loadRecent(key) {
+    if (pending.has(key)) return pending.get(key);
+    const cached = peek(key);
+    if (cached) return cached;
     const entry = {expires:0,promise:null};
     entry.promise = Promise.resolve().then(() => load(key)).then(value => {
       pending.delete(key);
@@ -26,7 +31,9 @@ export function recent(load,{ttlMs = 15000,limit = 2,now = () => Date.now()} = {
     });
     pending.set(key,entry.promise);
     return entry.promise;
-  };
+  }
+  loadRecent.peek = peek;
+  return loadRecent;
 }
 
 export function recentRequest(load) {

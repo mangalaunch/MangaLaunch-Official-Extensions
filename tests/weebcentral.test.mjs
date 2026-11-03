@@ -21,7 +21,7 @@ test('WeebCentral IDs, larger picture srcset covers and duplicate cards keep leg
 });
 test('WeebCentral ignores metadata wrappers with multiple labels instead of combining authors and tags', () => {
   const data = {sections:[{source:'/cover/small/a.webp',rows:[{labels:['Author(s):','Tag(s):'],text:'all metadata',links:['WRONG'],items:[]},
-    row('Author(s):','Author',['Author']),row('Tags:','Action',['Action']),row('Adult content:','Yes')]},
+    row('Author(s):','Author',['Author']),row('Tags(s):','Action',['Action']),row('Adult content:','Yes')]},
   {heading:'Title',rows:[row('Description:','Text'),{...row('Associated Name(s):','Other'),items:['Other']},{...row('Related Series(s):','Related'),items:['Related']}]}]};
   const manga = parseDetails(data,'A','https://weebcentral.com/series/canonical');
   assert.equal(manga.id,'canonical'); assert.equal(manga.author,'Author'); assert.equal(manga.artist,'Author'); assert.deepEqual(manga.tags,['Action']);
@@ -34,7 +34,7 @@ test('WeebCentral chapter IDs retain /chapters/ prefix, fractional numbers and U
 });
 test('WeebCentral reader/recommendation pagination does not request nonexistent extra pages', async () => {
   let requests = 0;
-  const source = createWeebCentral({http:{request:async input => {requests++;assert.ok(input.url.includes('reading_style=long_strip'));return {url:input.url,body:'html'};}},html:{extract:async () => ['https://hot.planeptune.us/1.png','/2.png']}});
+  const source = createWeebCentral({http:{request:async input => {requests++;assert.ok(input.url.includes('reading_style=long_strip'));return {url:input.url,body:'html'};}},html:{extract:async () => [{src:'https://hot.planeptune.us/1.png'},{src:'/placeholder',lazy:'/2.png'}]}});
   assert.deepEqual(await source.getRecommendations({mangaId:'A',page:2}),{items:[],page:2,hasNextPage:false}); assert.equal(requests,0);
   assert.deepEqual(await source.getPages({chapterId:'/chapters/ABC'}),[{index:0,imageUrl:'https://hot.planeptune.us/1.png'},{index:1,imageUrl:'https://weebcentral.com/2.png'}]);
   await assert.rejects(source.getPages({chapterId:'/bad/'}),error => error.code === 'parse_error');
@@ -52,7 +52,7 @@ test('WeebCentral details and recommendations share one title request and extrac
     assert.ok(projection.fields.details);
     assert.ok(projection.fields.recommendations);
     return {details:{sections:[{source:'/cover/small/a.webp',rows:[]},{heading:'A',rows:[row('Description:','Text')]}]},
-      recommendations:[{heading:'Recommendations',items:[card('A'),card('B')]}]};
+      recommendations:[card('A'),card('B')]};
   }}});
   const failed = await Promise.allSettled([source.getDetails({mangaId:'A'}),source.getRecommendations({mangaId:'A'})]);
   assert.ok(failed.every(result => result.status === 'rejected' && result.reason.code === 'network'));
@@ -71,8 +71,8 @@ test('WeebCentral grants the image host used by Kurotsuki no Yaergnacht chapters
     assert.equal(new URL(input.url).pathname,'/chapters/01KK1PHEG6RT59JN9196S0Z8AC/images');
     return {url:input.url,body:'chapter images'};
   }},html:{extract:async (_html,projection) => {
-    assert.equal(projection.selector,'section[x-data*=scroll] img, section[x-data~=scroll] img');
-    return [imageUrl];
+    assert.ok(projection.selector.includes('section#chapter-images img'));
+    return [{src:imageUrl}];
   }}});
   const pages = await source.getPages({chapterId:'/chapters/01KK1PHEG6RT59JN9196S0Z8AC'});
   assert.deepEqual(pages,[{index:0,imageUrl}]);
@@ -80,4 +80,25 @@ test('WeebCentral grants the image host used by Kurotsuki no Yaergnacht chapters
   assert.ok(definition.network.imageOrigins.includes('https://planeptune.us'));
   assert.equal(definition.media.refererOrigin,'https://weebcentral.com');
   assert.equal(requests,1);
+});
+
+test('Weeb Central reuses a complete embedded list and fetches a truncated list once', async () => {
+  const requests = [];
+  const chapters = [{href:'/chapters/CH1',title:'Chapter 1'}];
+  const source = createWeebCentral({http:{request:async input => {
+    const path = new URL(input.url).pathname;
+    requests.push(path);
+    return {url:input.url,body:path};
+  }},html:{extract:async body => {
+    if (body.endsWith('/full-chapter-list')) return [...chapters,{href:'/chapters/CH2',title:'Chapter 2'}];
+    return {details:{heading:'Title',sections:[]},recommendations:[],chapterList:{
+      chapters,showAll:body.endsWith('/long') ? '/series/long/full-chapter-list' : null,
+    }};
+  }}});
+  await source.getDetails({mangaId:'short'});
+  assert.deepEqual((await source.getChapters({mangaId:'short'})).map(item => item.id),['/chapters/CH1']);
+  await source.getDetails({mangaId:'long'});
+  const lists = await Promise.all([source.getChapters({mangaId:'long'}),source.getChapters({mangaId:'long'})]);
+  assert.ok(lists.every(list => list.length === 2));
+  assert.deepEqual(requests,['/series/short','/series/long','/series/long/full-chapter-list']);
 });

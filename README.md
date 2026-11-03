@@ -1,44 +1,48 @@
 # MangaLaunch Official Extensions
 
-Официальный пакет источников MangaLaunch. Это пакет проекта, а не заявление о партнёрстве с перечисленными сайтами.
+**English** · [Русский](README.ru.md)
 
-- extensionId: `official.mangalaunch.core.sources`
-- Название: **MangaLaunch Official Extensions**
-- 8 сайтов, 9 регистраций: MangaDex доступен на русском и английском.
-- Все источники имеют `isNsfw: false`. Shikimori, AniList и MyAnimeList — каталоги метаданных без чтения.
+This package provides the sources maintained by the MangaLaunch project. The listed websites are independent of MangaLaunch.
 
-## Источники
+The package ID is `official.mangalaunch.core.sources`. It covers eight websites with nine source entries because MangaDex is available in English and Russian. All entries declare `isNsfw: false`. Shikimori, AniList and MyAnimeList provide metadata only.
 
-- **MangaDex** — `ru.mangadex`
+## Sources
+
+### English
+
 - **MangaDex** — `en.mangadex`
 - **Mangakakalot** — `en.mangakakalot`
 - **Weeb Central** — `en.weebcentral`
-- **MangaChan** — `ru.mangachan`
-- **Desu** — `ru.desu`
-- **Shikimori** — `ru.shikimori`
 - **AniList** — `en.anilist`
 - **MyAnimeList** — `en.myanimelist`
 
-## Совместимость и переход
+### Russian
 
-ID источников, тайтлов и глав сохранены. Источники удалены из неофициального пакета; у пакетов разные extensionId. Нельзя одновременно устанавливать старую версию неофициального пакета с этими ID и официальный пакет.
+- **MangaDex** — `ru.mangadex`
+- **MangaChan** — `ru.mangachan`
+- **Desu** — `ru.desu`
+- **Shikimori** — `ru.shikimori`
 
-Для перехода нужна версия приложения с подтверждаемой передачей источников. Сначала обновите неофициальный пакет до версии без перенесённых источников и оставьте его установленным. Затем импортируйте официальный пакет, проверьте издателя и подтвердите отдельный диалог передачи источников, настроек и сессий входа. Приложение проверит подписанный manifest прежнего пакета и атомарно изменит владельца ID; библиотека, история и прогресс останутся на месте.
+## Switching from the unofficial package
 
-Если прежний пакет всё ещё объявляет источник, передача запрещена даже при выключенном пакете. Удаление пакета также не освобождает ID: если вы уже удалили его, сначала установите его актуальную версию без перенесённых источников. Не очищайте базу ради перехода. Механизм общий для любых пакетов и не содержит списка источников в приложении.
+The packages have different extension IDs. The transferred sources keep their existing source, title and chapter IDs. Use a MangaLaunch version that supports source transfers and follow these steps.
 
-## Разработка и публикация
+1. Update the unofficial package to a version that no longer lists these sources. Keep that version installed. If you already removed the unofficial package, install its updated version again.
+2. Import the official package and verify its publisher.
+3. Confirm the transfer of the sources, their settings and sign-in sessions. MangaLaunch verifies the previous package's signed manifest before transferring ownership. Your library, history and reading progress are preserved.
 
-Node.js 22+. `npm test` выполняет автономные тесты контрактов, парсеров и упаковщика с временными тестовыми ключами. Отдельная сборка приложения не нужна. Runtime-модули, иконки, SDK, шаблон и инструменты включены в проект; зависимостей от соседних папок нет.
+Disabling or uninstalling the old package leaves its source IDs reserved. The transfer requires the updated package's signed manifest.
 
-Руководства: [RU](docs/AUTHORING_RU.md), [EN](docs/AUTHORING_EN.md).
+## Development and releases
 
-Для публикации укажите свой репозиторий, новый отдельный ключ издателя и его публичный fingerprint. Закрытые ключи не копировались и не создавались. По умолчанию архив называется `official.mangalaunch.core.sources.mlsource`; рекомендованный keyId: `mangalaunch-core-official-2026`.
+Use Node.js 22 or later. Run `npm test` to check the source contracts, parsers and packaging with temporary test keys. This repository includes the source modules, icons, SDK, template and tools.
 
-Workflow `.github/workflows/release.yml` использует защищённое окружение `official-core-source-release`, переменную `MLSOURCE_PUBLISHER_KEY_ID` и секрет `MLSOURCE_SIGNING_KEY_BASE64`. Сначала настройте окружение и проверку тега; публикация запускается только в вашем репозитории.
+Authoring guide · [English](docs/AUTHORING_EN.md) · [Русский](docs/AUTHORING_RU.md)
 
-`build-package.ps1` — отдельный инструмент упаковки подписанного расширения. Он не запускался как сборка этой доработки; тесты проверяют его во временном каталоге. Готовые релизы, старые артефакты, зависимости, история Git и ключи в проект не копировались.
+The [release workflow](.github/workflows/release.yml) uses the protected `official-core-source-release` environment. Set the `MLSOURCE_PUBLISHER_KEY_ID` variable and `MLSOURCE_SIGNING_KEY_BASE64` secret there. Use a dedicated publisher key for this package, retain it for updates and publish its public fingerprint so users can verify the publisher. The recommended key ID is `mangalaunch-core-official-2026`.
 
-## Лицензия
+The workflow checks that the release tag points to the commit being published. The default archive name is `official.mangalaunch.core.sources.mlsource`. For local signing and packaging, use [`build-package.ps1`](build-package.ps1).
 
-См. [LICENSE](LICENSE).
+## License
+
+See [LICENSE](LICENSE).

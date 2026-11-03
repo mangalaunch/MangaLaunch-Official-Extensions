@@ -1,6 +1,6 @@
 # Создание и публикация расширений MangaLaunch
 
-[English](AUTHORING_EN.md)
+[English](AUTHORING_EN.md) · **Русский**
 
 Разделы: [полный пример источника](#source-example) · [контракт фильтров](#filter-contract) · [публикация](#publishing) · [справочник DTO, ctx и manifest](#api-reference).
 

@@ -54,17 +54,18 @@ const cookieAuth = (host,login = '/login/') => ({profileId:'host.cookie.v1',logi
   cookieOrigins:[origin(host)],sessionExport:{headers:['Cookie'],values:[]}});
 const metadata = (id,name,host,module,extra = {}) => source(id,name,host,module,{...extra,metadataOnly:true,recommendations:true,auth:cookieAuth(host,extra.login ?? '/login'),template:extra.template ?? '/manga/{id}'});
 export const registrations = [
-  ...['ru','en'].map(language => source(`${language}.mangadex`,'MangaDex','mangadex.org','engines/mangadex.mjs',{engine:'MangaDex API JS',recommendations:true,parameters:{translatedLanguage:language},origins:['https://api.mangadex.org'],images:['https://uploads.mangadex.org','https://mangadex.network'],template:'/title/{id}',bindings:{tags:'tags'}})),
-  source('en.mangakakalot','Mangakakalot','www.mangakakalot.gg','sources/mangakakalot.mjs',{engine:'MangaBox HTML/API JS',origins:['https://mangakakalot.gg','https://www.mangakakalove.com','https://mangakakalove.com'],images:['https://2xstorage.com','https://mangakakalot.gg','https://mangakakalove.com','https://manganelo.com','https://manganato.com'],template:'/manga/{id}',
+  ...['ru','en'].map(language => source(`${language}.mangadex`,'MangaDex','mangadex.org','engines/mangadex.mjs',{engine:'MangaDex API JS',recommendations:true,parameters:{translatedLanguage:language},origins:['https://api.mangadex.org'],images:['https://uploads.mangadex.org','https://mangadex.network'],template:'/title/{id}',bindings:{tags:'tags'},
+    network:{authOrigins:['https://mangadex.org','https://api.mangadex.org','https://uploads.mangadex.org']}})),
+  source('en.mangakakalot','Mangakakalot','www.kakamanga.com','sources/mangakakalot.mjs',{engine:'MangaBox HTML/API JS',origins:['https://kakamanga.com','https://www.mangakakalove.com','https://mangakakalove.com'],images:['https://2xstorage.com','https://kakamanga.com','https://mangakakalot.gg','https://mangakakalove.com','https://manganelo.com','https://manganato.com'],template:'/manga/{id}',
     // Explicit parent Domain grants for this source's own anti-bot cookies;
     // no account/raw session export and no shared browser jar.
-    network:{authOrigins:['https://www.mangakakalot.gg','https://mangakakalot.gg','https://www.mangakakalove.com','https://mangakakalove.com']}}),
+    network:{authOrigins:['https://www.kakamanga.com','https://kakamanga.com','https://www.mangakakalove.com','https://mangakakalove.com']}}),
   source('en.weebcentral','Weeb Central','weebcentral.com','sources/weebcentral.mjs',{recommendations:true,images:['https://planeptune.us','https://weebcentral.com','https://compsci88.com','https://scans.lastation.us'],template:'/series/{id}',bindings:{author:'author',artist:'author',tags:'tag'}}),
   source('ru.mangachan','MangaChan','im.manga-chan.me','engines/chan.mjs',{recommendations:true,template:'/{id}',encoding:'path',images:['https://manga-chan.me'],network:{authOrigins:['https://im.manga-chan.me','https://manga-chan.me']},bindings:{tags:'genres'}}),
   source('ru.desu','Desu','desu.uno','sources/desu.mjs',{custom:true,refresh:true,recommendations:true,template:'/{id}',encoding:'path',images:['https://desu.uno','https://desu.me'],bindings:{tags:'genres'}}),
   metadata('ru.shikimori','Shikimori','shikimori.io','sources/shikimori.mjs',{template:'/mangas/{id}',login:'/users/sign_in',images:['https://shikimori.io','https://shikimori.one']}),
   metadata('en.anilist','AniList','anilist.co','sources/anilist.mjs',{origins:['https://graphql.anilist.co'],images:['https://anilist.co'],login:'/login'}),
-  metadata('en.myanimelist','MyAnimeList','myanimelist.net','sources/myanimelist.mjs',{origins:['https://api.myanimelist.net'],images:['https://myanimelist.net'],login:'/login.php',network:{authOrigins:['https://myanimelist.net','https://api.myanimelist.net']}}),
+  metadata('en.myanimelist','MyAnimeList','myanimelist.net','sources/myanimelist.mjs',{engine:'MyAnimeList HTML JS',images:['https://cdn.myanimelist.net'],login:'/login.php'}),
 ];
 export function sourceDefinitions() { return registrations.map(({_module,...definition}) => definition); }
 export function manifestDefinition({version,publisherKeyId}) {
