@@ -18,22 +18,37 @@ const recommendation = (left,right) => ({title:'Related',href:'/recommendations/
 
 test('public rankings use site paging, include CDN covers and need no API client ID', async () => {
   const calls = [];
-  const source = createMyAnimeList(context(input => {calls.push(input); return 'HTML';}, () => [card]));
+  const source = createMyAnimeList(context(input => {calls.push(input); return 'HTML';}, (_,projection) =>
+    projection.selector === 'tr.ranking-list' ? [card] : {tiles:[],rows:[card]}));
   const [item] = await source.getPopular({page:2});
-  await source.getLatest();
+  assert.equal((await source.getLatest({page:2}))[0].id,'123');
   assert.equal(item.id,'123');
   assert.equal(item.coverUrl,'https://myanimelist.net/cover-large.jpg');
   assert.equal(item.rating,8.7);
   assert.equal(item.releaseYear,'2020');
-  const [popular,top] = calls.map(input => new URL(input.url));
+  const [popular,latest] = calls.map(input => new URL(input.url));
   assert.equal(popular.origin,'https://myanimelist.net');
   assert.equal(popular.pathname,'/topmanga.php');
   assert.equal(popular.searchParams.get('type'),'bypopularity');
   assert.equal(popular.searchParams.get('limit'),'50');
-  assert.equal(top.searchParams.has('type'),false);
+  assert.equal(latest.pathname,'/manga.php');
+  assert.equal(latest.searchParams.get('o'),'9');
+  assert.equal(latest.searchParams.get('c[0]'),'a');
+  assert.equal(latest.searchParams.get('c[1]'),'d');
+  assert.equal(latest.searchParams.get('cv'),'2');
+  assert.equal(latest.searchParams.get('show'),'50');
   assert.ok(calls.every(input => input.responseType==='text' && !input.headers['X-MAL-CLIENT-ID']));
   const definition = sourceDefinitions().find(source => source.id === 'en.myanimelist');
   assert.ok(definition.metadataOnly && definition.network.imageOrigins.includes('https://cdn.myanimelist.net'));
+  assert.deepEqual(definition.network.cookieDefaults,[{origin:definition.baseUrl,name:'view',value:'pc'}]);
+});
+
+test('unexpected empty preview markup is surfaced while empty search results remain valid', async () => {
+  const source = createMyAnimeList(context(() => 'HTML',(_,projection) =>
+    projection.selector ? [] : {tiles:[],rows:[]}));
+  await assert.rejects(source.getPopular(),{code:'parse_error'});
+  await assert.rejects(source.getLatest(),{code:'parse_error'});
+  assert.deepEqual(await source.search({searchTerm:'unmatched',selectedFilters:{ranking:['latest']}}),[]);
 });
 
 test('search retains site filter values and stops beyond the last result page', async () => {

@@ -69,6 +69,15 @@ function uniqueText(list) {
 function relationshipId(relationships, type) {
   return string(records(relationships).find(item => item.type === type)?.id);
 }
+
+function requiresBrowserVerification(error) {
+  if (error.httpStatus !== 403) return false;
+  const body = error.body;
+  const isChallenge = value => typeof value === 'string' &&
+    /bot challenge not passed|<title[^>]*>\s*just a moment\b/iu.test(value);
+  return isChallenge(body) || records(record(body).errors).some(item =>
+    isChallenge(item.title) || isChallenge(item.detail));
+}
 export function parseManga(value, language) {
   const item = requireRecord(value,'manga'), id = requireText(item.id,'manga.id');
   const attributes = requireRecord(item.attributes,'manga.attributes');
@@ -104,7 +113,7 @@ export default function createMangaDex(ctx) {
         userAgentProfile:'browser',headers:{Accept:'application/json',Origin:'https://mangadex.org',Referer:'https://mangadex.org/'}});
       return requireRecord(response.body);
     } catch (error) {
-      if (error.httpStatus === 403 && typeof error.body === 'string' && error.body.includes('Bot challenge not passed')) {
+      if (requiresBrowserVerification(error)) {
         throw Object.assign(Error('MangaDex requires browser verification.'),{code:'challenge_required',phase:'http',httpStatus:403});
       }
       throw error;

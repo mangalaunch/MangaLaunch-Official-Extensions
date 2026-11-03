@@ -65,7 +65,9 @@ export const registrations = [
   source('ru.desu','Desu','desu.uno','sources/desu.mjs',{custom:true,refresh:true,recommendations:true,template:'/{id}',encoding:'path',images:['https://desu.uno','https://desu.me'],bindings:{tags:'genres'}}),
   metadata('ru.shikimori','Shikimori','shikimori.io','sources/shikimori.mjs',{template:'/mangas/{id}',login:'/users/sign_in',images:['https://shikimori.io','https://shikimori.one']}),
   metadata('en.anilist','AniList','anilist.co','sources/anilist.mjs',{origins:['https://graphql.anilist.co'],images:['https://anilist.co'],login:'/login'}),
-  metadata('en.myanimelist','MyAnimeList','myanimelist.net','sources/myanimelist.mjs',{engine:'MyAnimeList HTML JS',images:['https://cdn.myanimelist.net'],login:'/login.php'}),
+  metadata('en.myanimelist','MyAnimeList','myanimelist.net','sources/myanimelist.mjs',{engine:'MyAnimeList HTML JS',images:['https://cdn.myanimelist.net'],login:'/login.php',
+    // The site's own Request Desktop Site preference keeps markup and offsets consistent.
+    network:{cookieDefaults:[{origin:'https://myanimelist.net',name:'view',value:'pc'}]}}),
 ];
 export function sourceDefinitions() { return registrations.map(({_module,...definition}) => definition); }
 export function manifestDefinition({version,publisherKeyId}) {

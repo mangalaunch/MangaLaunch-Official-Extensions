@@ -5,7 +5,12 @@ import {sourceDefinitions} from '../src/definitions.mjs';
 test('MangaBox filters/search and opaque chapter IDs preserve legacy semantics', () => {
   assert.equal(buildFilters().length,3); assert.equal(buildFilters()[2].options.length,41);
   assert.deepEqual(searchPath({searchTerm:' One: Piece!! ',page:2}),{path:'/search/story/one_piece',params:{page:2}});
-  assert.deepEqual(searchPath({selectedFilters:{genre:['action'],status:['ongoing'],sort:['topview']}}),{path:'/genre/action',params:{page:1,type:'topview',state:'ongoing'}});
+  assert.equal(buildFilters()[0].supportsDirection,false);
+  assert.match(buildFilters()[0].options.find(option => option.value === 'topview').label,/popular/i);
+  assert.deepEqual(searchPath({page:2,selectedFilters:{genre:['action'],status:['ongoing'],sort:['topview']}}),{path:'/genre/action',params:{page:2,filter:9}});
+  assert.deepEqual(searchPath({selectedFilters:{genre:['action'],status:['completed'],sort:['newest']}}),{path:'/genre/action',params:{page:1,filter:2}});
+  assert.deepEqual(searchPath({selectedFilters:{sort:['topview']}}),{path:'/manga-list/hot-manga',params:{page:1}});
+  assert.deepEqual(searchPath({selectedFilters:{genre:['action'],status:['drop']}}),{path:'/genre/action',params:{page:1,filter:4}});
   assert.equal(parseChapters({success:true,data:{chapters:[{chapter_slug:'c1',chapter_name:'Chapter 1.5'}]}},'first')[0].id,'/manga/first/c1');
 });
 test('MangaBox 2xstorage/CDN arrays, backup and DOM fallback do not duplicate image prefixes', () => {

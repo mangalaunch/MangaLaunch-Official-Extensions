@@ -2,20 +2,31 @@ import {chapter,filter,isoDate,manga,normalizeText,parseError,record,string} fro
 import {finiteNumber,requireArray,requireRecord,urlWithQuery} from '../core/http.mjs';
 
 const hosts = ['www.kakamanga.com','www.mangakakalove.com'];
+const orders = {
+  latest:{code:4,path:'/manga-list/latest-manga'},
+  newest:{code:1,path:'/manga-list/new-manga'},
+  topview:{code:7,path:'/manga-list/hot-manga'},
+};
+const statusOffsets = {all:0,completed:1,ongoing:2};
 const genreLabels = ['All','Action','Adult','Adventure','Comedy','Cooking','Doujinshi','Drama','Ecchi','Fantasy','Gender bender','Harem',
   'Historical','Horror','Isekai','Josei','Manhua','Manhwa','Martial arts','Mature','Mecha','Medical','Mystery','One shot','Psychological',
   'Romance','School life','Sci fi','Seinen','Shoujo','Shoujo ai','Shounen','Shounen ai','Slice of life','Smut','Sports','Supernatural','Tragedy','Webtoons','Yaoi','Yuri'];
 export function buildFilters() {
   const caption = 'Ignored when text search is used.';
-  return [{...filter('sort','sort','Order by',[['latest','Latest'],['newest','Newest'],['topview','Top read']]),caption},
-    {...filter('singleSelect','status','Status',[['all','All'],['completed','Completed'],['ongoing','Ongoing'],['drop','Dropped']]),caption},
+  return [{...filter('sort','sort','Order by',[['latest','Latest'],['newest','Newest'],['topview','Popular (Top read)']]),caption,supportsDirection:false},
+    {...filter('singleSelect','status','Status',[['all','All'],['completed','Completed'],['ongoing','Ongoing']]),caption},
     {...filter('singleSelect','genre','Category',genreLabels.map(label => [label.toLowerCase().replaceAll(' ','-'),label])),caption}];
 }
 export function searchPath({searchTerm = '',page = 1,selectedFilters = {}} = {}) {
   const query = searchTerm.trim();
   if (query) return {path:`/search/story/${query.toLowerCase().replace(/[^a-z0-9]+/gu,'_').replace(/^_+|_+$/gu,'')}`,params:{page:Math.max(1,page)}};
   const genre = selectedFilters.genre?.[0] ?? 'all';
-  return {path:genre && genre !== 'all' ? `/genre/${genre}` : '/genre',params:{page:Math.max(1,page),type:selectedFilters.sort?.[0] ?? 'latest',state:selectedFilters.status?.[0] ?? 'all'}};
+  const sort = selectedFilters.sort?.[0], state = selectedFilters.status?.[0];
+  const order = Object.hasOwn(orders,sort) ? orders[sort] : orders.latest;
+  const status = Object.hasOwn(statusOffsets,state) ? statusOffsets[state] : statusOffsets.all;
+  const params = {page:Math.max(1,page)};
+  if (genre === 'all' && status === statusOffsets.all) return {path:order.path,params};
+  return {path:`/genre/${genre}`,params:{...params,filter:order.code + status}};
 }
 export function mangaId(raw) {
   const value = string(raw); if (!value) return null;
@@ -126,8 +137,8 @@ export default function createMangaKakalot(ctx) {
   }
   return {
     async getFilters() { return buildFilters(); },
-    async getPopular({page = 1} = {}) { return listing('/manga-list/hot-manga',{page:Math.max(1,page)}); },
-    async getLatest({page = 1} = {}) { return listing('/manga-list/latest-manga',{page:Math.max(1,page)}); },
+    async getPopular({page = 1} = {}) { return listing(orders.topview.path,{page:Math.max(1,page)}); },
+    async getLatest({page = 1} = {}) { return listing(orders.latest.path,{page:Math.max(1,page)}); },
     async search(query) { const {path,params} = searchPath(query); return listing(path,params); },
     async getDetails({mangaId:id}) { const {data,url} = await html(`/manga/${id}`,{},detailsProjection); return parseDetails(data,id,url,url); },
     async getChapters({mangaId:id}) { return parseChapters(await request(`/api/manga/${id}/chapters`,{limit:'-1'},true),id); },

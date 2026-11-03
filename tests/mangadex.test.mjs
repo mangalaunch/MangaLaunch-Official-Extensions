@@ -19,11 +19,19 @@ test('both installed MangaDex variants advertise their implemented recommendatio
 });
 
 test('MangaDex exposes the observed verification response to the source WebView flow', async () => {
-  const source = createMangaDex({parameters:{translatedLanguage:'en'},http:{request:async input => {
-    assert.equal(input.userAgentProfile,'browser');
-    throw Object.assign(Error('HTTP 403'),{code:'access_denied',httpStatus:403,body:'Bot challenge not passed, refresh this page.'});
-  }}});
-  await assert.rejects(source.getPopular(),{code:'challenge_required',httpStatus:403});
+  for (const [body,code] of [
+    ['Bot challenge not passed, refresh this page.','challenge_required'],
+    ['<title>Just a moment...</title>','challenge_required'],
+    [{errors:[{detail:'Bot challenge not passed'}]},'challenge_required'],
+    [{errors:[{title:'Forbidden'}]},'access_denied'],
+  ]) {
+    const source = createMangaDex({parameters:{translatedLanguage:'en'},http:{request:async input => {
+      assert.equal(input.userAgentProfile,'browser');
+      throw Object.assign(Error('HTTP 403'),{code:'access_denied',httpStatus:403,body});
+    }}});
+    await assert.rejects(source.getPopular(),{code,httpStatus:403});
+    await assert.rejects(source.getLatest(),{code,httpStatus:403});
+  }
 });
 
 const item = (id = 'manga-opaque') => ({id,attributes:{title:{en:'English',ru:'Русское имя',ja:'日本語'},

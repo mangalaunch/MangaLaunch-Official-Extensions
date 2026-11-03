@@ -4,7 +4,7 @@ import {recent} from '../core/recent.mjs';
 
 const site = 'https://myanimelist.net';
 const pageSize = 50;
-const rankingOptions = [['all','All'],['bypopularity','Popularity'],['favorite','Favourites'],['manga','Manga'],
+const rankingOptions = [['all','All'],['bypopularity','Popularity'],['latest','Just added'],['favorite','Favourites'],['manga','Manga'],
   ['novels','Novels'],['oneshots','One shots'],['doujin','Doujinshi'],['manhwa','Manhwa'],['manhua','Manhua']];
 const typeOptions = [['manga|1','Manga'],['one_shot|3','One shot'],['doujinshi|4','Doujinshi'],['light_novel|2','Light novel'],
   ['novel|8','Novel'],['manhwa|5','Manhwa'],['manhua|6','Manhua']];
@@ -56,8 +56,9 @@ export function parseBrowse(input) {
     return manga({id,title,coverUrl:cover(item.image),description:string(item.description),type:string(item.type),rating:finiteNumber(item.rating,null)});
   }).filter(Boolean);
 }
-export function browseUrl({page = 1,searchTerm = '',selectedFilters = {}}) {
+export function browseUrl({page = 1,searchTerm = '',selectedFilters = {}}, {latest = false} = {}) {
   const query = {cat:'manga'};
+  if (latest) Object.assign(query,{o:9,'c[0]':'a','c[1]':'d',cv:2});
   if (page > 1) query.show = (page-1)*pageSize;
   if (searchTerm.trim()) query.q = searchTerm.trim();
   for (const key of ['type','status']) {
@@ -110,17 +111,24 @@ export default function createMyAnimeList(ctx) {
   async function ranking(page, type) {
     const url = urlWithQuery('/topmanga.php',site,{type:type === 'all' ? null : type,limit:page > 1 ? (page-1)*pageSize : null});
     const rows = requireArray(await html(url,rankingProjection),'MyAnimeList rankings');
-    return rows.map(item => {
+    const items = rows.map(item => {
       const id = idFromUrl(item.link?.href), title = string(item.link?.title);
       return id && title ? manga({id,title,coverUrl:cover(item.image),rating:finiteNumber(item.rating,null),
         type:string(item.info?.split(' (')[0]),releaseYear:year(item.info)}) : null;
     }).filter(Boolean);
+    if (!items.length && (page === 1 || rows.length)) throw parseError('MyAnimeList ranking cards were not found');
+    return items;
   }
-  async function browse(query,page) {
+  async function browse(query, {latest = false} = {}) {
     try {
-      return parseBrowse(await html(browseUrl(query),browseProjection));
+      const items = parseBrowse(await html(browseUrl(query,{latest}),browseProjection));
+      if (latest && !items.length && query.page === 1 && !query.searchTerm?.trim() &&
+          !['type','status','genre'].some(key => values(query.selectedFilters?.[key]).length)) {
+        throw parseError('MyAnimeList latest cards were not found');
+      }
+      return items;
     } catch (error) {
-      if (page > 1 && error.httpStatus === 404) return [];
+      if (query.page > 1 && error.httpStatus === 404) return [];
       throw error;
     }
   }
@@ -139,16 +147,19 @@ export default function createMyAnimeList(ctx) {
           return [string(item.value),string(item.label)?.replace(/\s*\(\d[\d,]*\)\s*$/u,'')]; })
           .filter(([id,label]) => id && label && !seen.has(id) && seen.add(id));
       }
-      const sort = filter('sort','ranking','Rankings',rankingOptions); sort.caption = 'Used when browsing without a search query or filters.';
+      const sort = {...filter('sort','ranking','Order by',rankingOptions),supportsDirection:false};
+      sort.caption = 'Rankings other than Just added are used when browsing without a search query or filters.';
       return [sort,filter('singleSelect','type','Type',typeOptions),filter('singleSelect','status','Status',statusOptions),
         filter('multiSelect','genre','Genres',genres)];
     },
     async getPopular({page = 1} = {}) { return ranking(Math.max(1,page),'bypopularity'); },
-    async getLatest({page = 1} = {}) { return ranking(Math.max(1,page),'all'); },
+    async getLatest({page = 1} = {}) { return browse({page:Math.max(1,page)},{latest:true}); },
     async search(query) {
       const filters = query.selectedFilters ?? {}, page = Math.max(1,query.page ?? 1);
-      if (query.searchTerm?.trim() || ['type','status','genre'].some(key => values(filters[key]).length)) return browse(query,page);
       const type = selected(filters,'ranking')?.split(':')[0].trim();
+      if (type === 'latest' || query.searchTerm?.trim() || ['type','status','genre'].some(key => values(filters[key]).length)) {
+        return browse({...query,page},{latest:type === 'latest'});
+      }
       return ranking(page,rankingOptions.some(([value]) => value === type) ? type : 'all');
     },
     async getDetails({mangaId}) { return (await titlePage(mangaId)).details; },
