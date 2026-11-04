@@ -30,5 +30,6 @@ test('MangaBox retry is source-local and never retries auth/cancellation/parse e
   assert.equal(new URL(calls[0]).origin,definition.baseUrl);
   assert.equal(definition.baseUrl,'https://www.kakamanga.com');
   assert.equal(definition.media.refererOrigin,definition.baseUrl);
+  assert.ok(definition.network.imageOrigins.includes('https://storage.waitst.com'));
   assert.equal(new URL(calls[1]).host,'www.mangakakalove.com'); assert.equal(new URL(calls[2]).host,'www.mangakakalove.com');
 });

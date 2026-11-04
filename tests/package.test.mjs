@@ -5,9 +5,9 @@ import {readFile,readdir} from 'node:fs/promises';
 import {registrations,sourceDefinitions,manifestDefinition} from '../src/definitions.mjs';
 import createSource from '../src/index.mjs';
 import {canonicalJson,packageZip,signedManifest,verifyPackage} from '../tools/package_format.mjs';
-test('official package registers 9 standard IDs and its offline factories never perform IO', () => {
-  assert.equal(registrations.length,9); assert.equal(new Set(registrations.map(source => source.id)).size,9);
-  assert.deepEqual(registrations.map(source => source.id),["ru.mangadex","en.mangadex","en.mangakakalot","en.weebcentral","ru.mangachan","ru.desu","ru.shikimori","en.anilist","en.myanimelist"]);
+test('official package registers 10 standard IDs and its offline factories never perform IO', () => {
+  assert.equal(registrations.length,10); assert.equal(new Set(registrations.map(source => source.id)).size,10);
+  assert.deepEqual(registrations.map(source => source.id),["ru.mangadex","en.mangadex","en.mangakakalot","en.mangafox","en.weebcentral","ru.mangachan","ru.desu","ru.shikimori","en.anilist","en.myanimelist"]);
   assert.ok(registrations.every(source => source.isNsfw === false));
   assert.equal(manifestDefinition({version:'1.0.0',publisherKeyId:'fixture'}).extensionId,'official.mangalaunch.core.sources');
   assert.match(manifestDefinition({version:'1.0.0',publisherKeyId:'fixture'}).name,/Official Extensions/);
@@ -25,7 +25,7 @@ test('official ZIP/signature payload is reproducible and rejects tampering indep
   for (const definition of registrations) payload.set(definition.branding.icon,Buffer.from('Fixture image bytes'));
   const signed = signedManifest(manifestDefinition({version:'1.0.0',publisherKeyId:'test-generated'}),payload,pem);
   const files = new Map([['manifest.json',signed.bytes],['signature.ed25519',signed.signature],...payload]), first = packageZip(files), second = packageZip(new Map([...files].reverse()));
-  assert.deepEqual(first,second); assert.equal(verifyPackage(first,signed.publicKey).sources.length,9);
+  assert.deepEqual(first,second); assert.equal(verifyPackage(first,signed.publicKey).sources.length,10);
   const corrupt = Buffer.from(first); corrupt[40] ^= 1; assert.throws(() => verifyPackage(corrupt,signed.publicKey));
   assert.equal(canonicalJson({z:1,a:{b:2,a:3}}),'{"a":{"a":3,"b":2},"z":1}');
 });

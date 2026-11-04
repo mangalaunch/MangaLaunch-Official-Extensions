@@ -1,5 +1,6 @@
 import createMangaDex from './engines/mangadex.mjs';
 import createMangaKakalot from './sources/mangakakalot.mjs';
+import createMangaFox from './sources/mangafox.mjs';
 import createWeebCentral from './sources/weebcentral.mjs';
 import createChan from './engines/chan.mjs';
 import createDesu from './sources/desu.mjs';
@@ -11,6 +12,7 @@ const factories = new Map([
   ['ru.mangadex',createMangaDex],
   ['en.mangadex',createMangaDex],
   ['en.mangakakalot',createMangaKakalot],
+  ['en.mangafox',createMangaFox],
   ['en.weebcentral',createWeebCentral],
   ['ru.mangachan',createChan],
   ['ru.desu',createDesu],

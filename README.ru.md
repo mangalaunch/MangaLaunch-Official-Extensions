@@ -4,7 +4,7 @@
 
 Официальный пакет источников, которые поддерживает проект MangaLaunch. Перечисленные сайты работают независимо от MangaLaunch.
 
-ID пакета — `official.mangalaunch.core.sources`. В нём восемь сайтов и девять источников, поскольку MangaDex доступен на английском и русском. У всех источников указан `isNsfw: false`. Shikimori, AniList и MyAnimeList предоставляют только метаданные.
+ID пакета — `official.mangalaunch.core.sources`. В нём девять сайтов и десять источников, поскольку MangaDex доступен на английском и русском. У всех источников указан `isNsfw: false`. Shikimori, AniList и MyAnimeList предоставляют только метаданные.
 
 ## Источники
 
@@ -12,6 +12,7 @@ ID пакета — `official.mangalaunch.core.sources`. В нём восемь 
 
 - **MangaDex** — `en.mangadex`
 - **Mangakakalot** — `en.mangakakalot`
+- **MangaFox** — `en.mangafox`
 - **Weeb Central** — `en.weebcentral`
 - **AniList** — `en.anilist`
 - **MyAnimeList** — `en.myanimelist`

@@ -1,5 +1,5 @@
 import {recent} from '../core/recent.mjs';
-import {chapter, filter, isoDate, manga, record, records, string} from '../core/data.mjs';
+import {chapter, filter, isoDate, manga, parseError, record, records, string} from '../core/data.mjs';
 import {finiteNumber, requireArray, requireRecord, requireText, urlWithQuery} from '../core/http.mjs';
 import {tagGroups} from './mangadex_tags.mjs';
 
@@ -70,13 +70,12 @@ function relationshipId(relationships, type) {
   return string(records(relationships).find(item => item.type === type)?.id);
 }
 
-function requiresBrowserVerification(error) {
-  if (error.httpStatus !== 403) return false;
-  const body = error.body;
-  const isChallenge = value => typeof value === 'string' &&
-    /bot challenge not passed|<title[^>]*>\s*just a moment\b/iu.test(value);
-  return isChallenge(body) || records(record(body).errors).some(item =>
-    isChallenge(item.title) || isChallenge(item.detail));
+const isChallengeText = value => typeof value === 'string' &&
+  /bot challenge not passed|<title[^>]*>\s*just a moment\b/iu.test(value);
+function verificationError(status) {
+  return Object.assign(Error('MangaDex requires browser verification.'),{
+    code:'challenge_required',phase:'http',...(status ? {httpStatus:status} : {}),
+  });
 }
 export function parseManga(value, language) {
   const item = requireRecord(value,'manga'), id = requireText(item.id,'manga.id');
@@ -108,16 +107,28 @@ export default function createMangaDex(ctx) {
   const language = ctx.parameters.translatedLanguage;
   if (!['ru','en'].includes(language)) throw new Error('Unsupported MangaDex language configuration');
   async function json(path, query = {}) {
+    const url = urlWithQuery(path,'https://api.mangadex.org',query);
+    let response;
     try {
-      const response = await ctx.http.request({method:'GET',url:urlWithQuery(path,'https://api.mangadex.org',query),responseType:'json',
+      response = await ctx.http.request({method:'GET',url,responseType:'text',
         userAgentProfile:'browser',headers:{Accept:'application/json',Origin:'https://mangadex.org',Referer:'https://mangadex.org/'}});
-      return requireRecord(response.body);
     } catch (error) {
-      if (requiresBrowserVerification(error)) {
-        throw Object.assign(Error('MangaDex requires browser verification.'),{code:'challenge_required',phase:'http',httpStatus:403});
+      if (error.httpStatus === 403 && (isChallengeText(error.body) ||
+          records(record(error.body).errors).some(item => isChallengeText(item.title) || isChallengeText(item.detail)))) {
+        throw verificationError(403);
       }
       throw error;
     }
+    const finalUrl = new URL(response.url ?? url);
+    if (finalUrl.origin === 'https://mangadex.org' && /^\/edge\/challenge\/?$/u.test(finalUrl.pathname)) {
+      throw verificationError();
+    }
+    let payload;
+    try { payload = JSON.parse(response.body); } catch {
+      if (isChallengeText(response.body)) throw verificationError();
+      throw parseError('Invalid MangaDex JSON response.');
+    }
+    return requireRecord(payload);
   }
   const related = recent(async mangaId => [...new Set(data(await json(`/manga/${encodeURIComponent(mangaId)}/recommendation`))
     .flatMap(item => records(requireRecord(item).relationships)).filter(item => item.type === 'manga')

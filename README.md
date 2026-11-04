@@ -4,7 +4,7 @@
 
 This package provides the sources maintained by the MangaLaunch project. The listed websites are independent of MangaLaunch.
 
-The package ID is `official.mangalaunch.core.sources`. It covers eight websites with nine source entries because MangaDex is available in English and Russian. All entries declare `isNsfw: false`. Shikimori, AniList and MyAnimeList provide metadata only.
+The package ID is `official.mangalaunch.core.sources`. It covers nine websites with ten source entries because MangaDex is available in English and Russian. All entries declare `isNsfw: false`. Shikimori, AniList and MyAnimeList provide metadata only.
 
 ## Sources
 
@@ -12,6 +12,7 @@ The package ID is `official.mangalaunch.core.sources`. It covers eight websites 
 
 - **MangaDex** — `en.mangadex`
 - **Mangakakalot** — `en.mangakakalot`
+- **MangaFox** — `en.mangafox`
 - **Weeb Central** — `en.weebcentral`
 - **AniList** — `en.anilist`
 - **MyAnimeList** — `en.myanimelist`

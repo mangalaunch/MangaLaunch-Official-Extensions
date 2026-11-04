@@ -20,7 +20,7 @@ export function buildFilters() {
 export function searchPath({searchTerm = '',page = 1,selectedFilters = {}} = {}) {
   const query = searchTerm.trim();
   if (query) return {path:`/search/story/${query.toLowerCase().replace(/[^a-z0-9]+/gu,'_').replace(/^_+|_+$/gu,'')}`,params:{page:Math.max(1,page)}};
-  const genre = selectedFilters.genre?.[0] ?? 'all';
+  const genre = string(selectedFilters.genre?.[0]) ?? 'all';
   const sort = selectedFilters.sort?.[0], state = selectedFilters.status?.[0];
   const order = Object.hasOwn(orders,sort) ? orders[sort] : orders.latest;
   const status = Object.hasOwn(statusOffsets,state) ? statusOffsets[state] : statusOffsets.all;

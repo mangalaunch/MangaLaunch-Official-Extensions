@@ -78,6 +78,15 @@ test('MAL tile and table results retain cover, description and visible metadata'
   assert.equal(table.id,'123');
 });
 
+test('MAL catalogue requests a portrait thumbnail and preserves the CDN signature', () => {
+  const src = 'https://cdn.myanimelist.net/r/150x170/images/manga/1/157897.jpg?s=f03b5f8bfeb0b0962b7d5e7cb9a8d0d3';
+  const [item] = parseBrowse({tiles:[],rows:[{link:card.link,image:{dataSrc:src}}]});
+  assert.equal(item.coverUrl,src.replace('/150x170/','/320x480/'));
+  const full = src.replace('/r/150x170','');
+  const [original] = parseBrowse({tiles:[],rows:[{link:card.link,image:{dataSrc:full}}]});
+  assert.equal(original.coverUrl,full);
+});
+
 test('MAL genres cache is per context and count suffix is removed', async () => {
   let calls = 0;
   const ctx = context(() => {calls++; return 'HTML';},(_,projection) => {

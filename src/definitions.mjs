@@ -1,4 +1,6 @@
 /** Signed, declarative registrations. IDs are the existing persistent app IDs. */
+import {imageOrigins as mangaFoxImages} from './sources/mangafox.mjs';
+
 const browse = ['browse','latest','search','filters'];
 const origin = host => `https://${host}`;
 const sourceBranding = {
@@ -9,6 +11,10 @@ const sourceBranding = {
   "mangakakalot": {
     "icon": "assets/source_logos/mangakakalot.png",
     "accentColor": "#F48A46"
+  },
+  "mangafox": {
+    "icon": "assets/source_logos/mangafox.png",
+    "accentColor": "#F59B42"
   },
   "weebcentral": {
     "icon": "assets/source_logos/weebcentral.png",
@@ -53,13 +59,17 @@ function source(id,name,host,module,extra = {}) {
 const cookieAuth = (host,login = '/login/') => ({profileId:'host.cookie.v1',loginUrl:new URL(login,origin(host)).href,
   cookieOrigins:[origin(host)],sessionExport:{headers:['Cookie'],values:[]}});
 const metadata = (id,name,host,module,extra = {}) => source(id,name,host,module,{...extra,metadataOnly:true,recommendations:true,auth:cookieAuth(host,extra.login ?? '/login'),template:extra.template ?? '/manga/{id}'});
+const dexBrowserOrigins = ['https://mangadex.org','https://auth.mangadex.org','https://api.mangadex.org','https://uploads.mangadex.org'];
 export const registrations = [
   ...['ru','en'].map(language => source(`${language}.mangadex`,'MangaDex','mangadex.org','engines/mangadex.mjs',{engine:'MangaDex API JS',recommendations:true,parameters:{translatedLanguage:language},origins:['https://api.mangadex.org'],images:['https://uploads.mangadex.org','https://mangadex.network'],template:'/title/{id}',bindings:{tags:'tags'},
-    network:{authOrigins:['https://mangadex.org','https://api.mangadex.org','https://uploads.mangadex.org']}})),
-  source('en.mangakakalot','Mangakakalot','www.kakamanga.com','sources/mangakakalot.mjs',{engine:'MangaBox HTML/API JS',origins:['https://kakamanga.com','https://www.mangakakalove.com','https://mangakakalove.com'],images:['https://2xstorage.com','https://kakamanga.com','https://mangakakalot.gg','https://mangakakalove.com','https://manganelo.com','https://manganato.com'],template:'/manga/{id}',
+    auth:{...cookieAuth('mangadex.org','/'),cookieOrigins:dexBrowserOrigins},
+    network:{transportProfile:'host.platform.v1',userAgentProfile:'browser'}})),
+  source('en.mangakakalot','Mangakakalot','www.kakamanga.com','sources/mangakakalot.mjs',{engine:'MangaBox HTML/API JS',origins:['https://kakamanga.com','https://www.mangakakalove.com','https://mangakakalove.com'],images:['https://2xstorage.com','https://storage.waitst.com','https://kakamanga.com','https://mangakakalot.gg','https://mangakakalove.com','https://manganelo.com','https://manganato.com'],template:'/manga/{id}',
     // Explicit parent Domain grants for this source's own anti-bot cookies;
     // no account/raw session export and no shared browser jar.
     network:{authOrigins:['https://www.kakamanga.com','https://kakamanga.com','https://www.mangakakalove.com','https://mangakakalove.com']}}),
+  source('en.mangafox','MangaFox','fanfox.net','sources/mangafox.mjs',{origins:['https://m.fanfox.net'],images:mangaFoxImages,template:'/manga/{id}/',bindings:{author:'author',artist:'artist',tags:'genre'},
+    media:{refererOrigin:'https://m.fanfox.net',userAgentProfile:'mobileSafari'},network:{cookieDefaults:[{origin:'https://fanfox.net',name:'isAdult',value:'1'},{origin:'https://m.fanfox.net',name:'isAdult',value:'1'},{origin:'https://m.fanfox.net',name:'readway',value:'2'}]}}),
   source('en.weebcentral','Weeb Central','weebcentral.com','sources/weebcentral.mjs',{recommendations:true,images:['https://planeptune.us','https://weebcentral.com','https://compsci88.com','https://scans.lastation.us'],template:'/series/{id}',bindings:{author:'author',artist:'author',tags:'tag'}}),
   source('ru.mangachan','MangaChan','im.manga-chan.me','engines/chan.mjs',{recommendations:true,template:'/{id}',encoding:'path',images:['https://manga-chan.me'],network:{authOrigins:['https://im.manga-chan.me','https://manga-chan.me']},bindings:{tags:'genres'}}),
   source('ru.desu','Desu','desu.uno','sources/desu.mjs',{custom:true,refresh:true,recommendations:true,template:'/{id}',encoding:'path',images:['https://desu.uno','https://desu.me'],bindings:{tags:'genres'}}),

@@ -36,7 +36,12 @@ function cover(input) {
   const image = record(input);
   const fromSet = value => string(value)?.split(',').at(-1).trim().split(/\s+/u)[0] ?? null;
   const candidate = first([fromSet(image.dataSet),image.dataSrc,fromSet(image.srcSet),image.src]);
-  return candidate ? new URL(candidate,site).href : null;
+  if (!candidate) return null;
+  const url = new URL(candidate,site);
+  if (url.hostname === 'cdn.myanimelist.net') {
+    url.pathname = url.pathname.replace(/^\/r\/\d+x\d+\/images\/manga\//u,'/r/320x480/images/manga/');
+  }
+  return url.href;
 }
 export function parseBrowse(input) {
   const data = requireRecord(input,'MyAnimeList HTML catalog');

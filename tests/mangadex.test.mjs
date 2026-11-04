@@ -14,6 +14,12 @@ test('both installed MangaDex variants advertise their implemented recommendatio
     assert.ok(source.network.origins.includes('https://api.mangadex.org'));
     assert.ok(source.network.authOrigins.includes('https://api.mangadex.org'));
     assert.ok(source.network.authOrigins.includes('https://uploads.mangadex.org'));
+    assert.equal(source.features.auth,true);
+    assert.ok(source.capabilities.includes('account'));
+    assert.equal(source.auth.loginUrl,'https://mangadex.org/');
+    assert.ok(source.auth.cookieOrigins.includes('https://auth.mangadex.org'));
+    assert.ok(source.auth.cookieOrigins.includes('https://api.mangadex.org'));
+    assert.equal(source.network.transportProfile,'host.platform.v1');
     assert.equal(source.parameters.translatedLanguage,source.language);
   }
 });
@@ -34,6 +40,15 @@ test('MangaDex exposes the observed verification response to the source WebView 
   }
 });
 
+test('MangaDex recognizes a followed redirect to its verification page', async () => {
+  const source = createMangaDex({parameters:{translatedLanguage:'en'},http:{request:async request => {
+    assert.equal(request.responseType,'text');
+    return {status:200,url:'https://mangadex.org/edge/challenge?src=fixture',body:'<html>Verification</html>'};
+  }}});
+  await assert.rejects(source.getPopular(),{code:'challenge_required'});
+  await assert.rejects(source.getLatest(),{code:'challenge_required'});
+});
+
 const item = (id = 'manga-opaque') => ({id,attributes:{title:{en:'English',ru:'Русское имя',ja:'日本語'},
   altTitles:[{en:'English'},{ja:'日本語'}],description:{en:'Description',ru:'Описание'},year:2025,status:'ongoing',
   publicationDemographic:'shounen',contentRating:'safe',tags:[{attributes:{name:{en:'Action',ru:'Боевик'}}}]},
@@ -43,7 +58,9 @@ const item = (id = 'manga-opaque') => ({id,attributes:{title:{en:'English',ru:'�
 const chapter = (id, overrides = {}) => ({id,attributes:{volume:'2',chapter:'10.5',title:'Side story',pages:3,
   publishAt:'2025-04-15T12:00:00+03:00',...overrides}});
 function context(handler, language = 'ru') {
-  return {parameters:{translatedLanguage:language},http:{request:async request => ({body:await handler(new URL(request.url),request)})}};
+  return {parameters:{translatedLanguage:language},http:{request:async request => ({
+    url:request.url,body:JSON.stringify(await handler(new URL(request.url),request)),
+  })}};
 }
 
 test('localized metadata, tags, cover, creators and opaque IDs match the Dart contract', () => {
